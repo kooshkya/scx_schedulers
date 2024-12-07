@@ -48,6 +48,8 @@ int main(int argc, char **argv) {
 
     SCX_OPS_LOAD(skel, split_ops, scx_split, uei);
     link = SCX_OPS_ATTACH(skel, split_ops, scx_split);
+    printf("scx_split scheduler has started...\n");
+    fflush(stdout);
 
     while (!exit_req && !UEI_EXITED(skel, uei)) {
         sleep(1);
@@ -59,5 +61,7 @@ int main(int argc, char **argv) {
 
     if (UEI_ECODE_RESTART(ecode))
         goto restart;
+
+    printf("scx_split exiting with code 0\n");
     return 0;
 }
