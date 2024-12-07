@@ -7,7 +7,7 @@ UEI_DEFINE(uei);
 const volatile u32 cpu_count;
 
 #define MAX_CPUS 20		// TODO: make this dynamically change to machine's CPU count
-#define MAX_PROCESSES 1024
+#define MAX_PROCESSES 1024	// TODO: put a more realistic upper bound on process count
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
@@ -41,7 +41,7 @@ bool pid_exists(pid_t pid_to_check) {
 
 s32 BPF_STRUCT_OPS(split_select_cpu, struct task_struct *p, s32 prev_cpu, u64 wake_flags)
 {
-	bpf_printk("simple_select_cpu: p=%p, prev_cpu=%d, wake_flags=%llu\n", p, prev_cpu, wake_flags);
+	bpf_printk("split_select_cpu: pid=%d, prev_cpu=%d, wake_flags=%llu\n", p->pid, prev_cpu, wake_flags);
 	if (pid_exists(p->pid)) {
 		bpf_printk("existed in pid list");
 		struct bpf_cpumask * mask = bpf_cpumask_create();
