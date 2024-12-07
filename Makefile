@@ -35,7 +35,7 @@ $(OBJ_DIR) $(OUT_DIR):
 
 # Rule to compile BPF object files
 $(OBJ_DIR)/%.bpf.o: $(SRC_DIR)/%.bpf.c $(OBJ_DIR)
-	$(CC) $(CFLAGS) $(INCLUDE_DIRS) $(BPF_TARGET) -D__TARGET_ARCH_x86 -mcpu=v3 -mlittle-endian '-idirafter$ /usr/lib/llvm-18/lib/clang/18/include' '-idirafter$ /usr/local/include' '-idirafter$ /usr/include/x86_64-linux-gnu' '-idirafter$ /usr/include' -c $< -o $@
+	$(CC) $(CFLAGS) $(INCLUDE_DIRS) $(BPF_TARGET) -mcpu=v3 -c $< -o $@
 
 # Rule to generate BPF skeleton headers
 $(BUILD_DIR)/%.bpf.skel.h: $(OBJ_DIR)/%.bpf.o
