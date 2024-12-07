@@ -1,6 +1,6 @@
 # Compiler and flags
 CC = clang
-CFLAGS = -O2 -g
+CFLAGS = -O2 -g -Wno-compare-distinct-pointer-types -Wall
 BPF_TARGET = -target bpf
 INCLUDE_DIRS = -I./include -I./include/vmlinux -I/usr/include/$(uname -m)-linux-gnu
 
@@ -22,6 +22,8 @@ NAMES = $(SRC_FILES_NO_BPF:$(SRC_DIR)/scx_%.c=%)
 # Now generate OUT_FILES from the filtered list
 OUT_FILES = $(SRC_FILES_NO_BPF:$(SRC_DIR)/%.c=$(OUT_DIR)/%.out)
 
+.PRECIOUS: $(BPF_OBJ_FILES) $(BPF_SKEL_FILES)
+
 $(foreach name, $(NAMES), $(eval $(name): $(OUT_DIR)/scx_$(name).out))
 
 # Default target
@@ -33,7 +35,7 @@ $(OBJ_DIR) $(OUT_DIR):
 
 # Rule to compile BPF object files
 $(OBJ_DIR)/%.bpf.o: $(SRC_DIR)/%.bpf.c $(OBJ_DIR)
-	$(CC) $(CFLAGS) $(INCLUDE_DIRS) $(BPF_TARGET) -c $< -o $@
+	$(CC) $(CFLAGS) $(INCLUDE_DIRS) $(BPF_TARGET) -D__TARGET_ARCH_x86 -mcpu=v3 -mlittle-endian '-idirafter$ /usr/lib/llvm-18/lib/clang/18/include' '-idirafter$ /usr/local/include' '-idirafter$ /usr/include/x86_64-linux-gnu' '-idirafter$ /usr/include' -c $< -o $@
 
 # Rule to generate BPF skeleton headers
 $(BUILD_DIR)/%.bpf.skel.h: $(OBJ_DIR)/%.bpf.o

@@ -164,7 +164,7 @@ s32 BPF_STRUCT_OPS_SLEEPABLE(simple_init)
 void BPF_STRUCT_OPS(simple_exit, struct scx_exit_info *ei)
 {
 	bpf_printk("simple_exit: ei=%p\n", ei);
-//	UEI_RECORD(uei, ei);
+	UEI_RECORD(uei, ei);
 }
 
 SCX_OPS_DEFINE(simple_ops,
