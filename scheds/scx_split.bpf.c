@@ -1,7 +1,5 @@
 #include <scx/common.bpf.h>
 
-// #include <vmlinux/vmlinux-v6.10-rc2-g1edab907b57d.h>
-
 char _license[] SEC("license") = "GPL";
 
 UEI_DEFINE(uei);
