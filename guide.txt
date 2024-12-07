@@ -1,0 +1,5 @@
+clang -O2 -I./include -I./include/vmlinux -g -target bpf -c ./scheds/scx_simple.bpf.c -o ./build/scx_simple.bpf.o
+sudo ./bpftool gen skeleton ./build/scx_simple.bpf.o name scx_simple > ./build/scx_simple.bpf.skel.h
+clang -I./build -I./include -I./include/vmlinux -I/usr/include/$(uname -m)-linux-gnu -lbpf -g -o build/scx_simple.out ./scheds/scx_simple.c
+
+clang -O2 -I./include -I./include/vmlinux -g -target bpf -c ./scx_split.bpf.c -o ./build/scx_split.bpf.o
