@@ -34,6 +34,8 @@ int fast_group_size;
 int slow_group_size;
 int pid_array_size;
 
+u64 nr_finished_fast, nr_sent_to_slow;
+
 bool pid_exists(pid_t pid_to_check) {
 	u8 *value = bpf_map_lookup_elem(&slow_pids, &pid_to_check);
     return value != NULL;
@@ -146,6 +148,12 @@ s32 BPF_STRUCT_OPS(split_exit)
 	return 0;
 }
 
+void BPF_STRUCT_OPS(split_quiescent, struct task_struct *p, u64 deq_flags) {
+	if (!pid_exists(p->pid)) {
+		__sync_fetch_and_add(&nr_finished_fast, 1);
+	}
+}
+
 void BPF_STRUCT_OPS(split_tick, struct task_struct *p)
 {
 	if (p->scx.slice == 0 && !pid_exists(p->pid)) {
@@ -153,6 +161,7 @@ void BPF_STRUCT_OPS(split_tick, struct task_struct *p)
 		pid_t pid = p->pid;
     	bpf_map_update_elem(&slow_pids, &pid, &value, BPF_ANY);		// TODO: add error checking to this
 		bpf_printk("the pid %d has moved to slow group\n", p->pid);
+		__sync_fetch_and_add(&nr_sent_to_slow, 1);
 	}
 }
 

@@ -11,6 +11,8 @@
 char _license[] SEC("license") = "GPL";
 UEI_DEFINE(uei);
 
+#define MY_DSQ 0
+
 const volatile bool select_cpu_mute;
 const volatile bool enqueue_mute;
 const volatile bool dequeue_mute;
@@ -45,7 +47,7 @@ void BPF_STRUCT_OPS(maximal_enqueue, struct task_struct *p, u64 enq_flags)
 {
 	if (!enqueue_mute)
 		bpf_printk("enqueue: pid=%d, enq_flags=%llu\n", p->pid, enq_flags);
-	scx_bpf_dispatch(p, SCX_DSQ_GLOBAL, SCX_SLICE_DFL, enq_flags);
+	scx_bpf_dispatch(p, MY_DSQ, SCX_SLICE_DFL, enq_flags);
 }
 
 void BPF_STRUCT_OPS(maximal_dequeue, struct task_struct *p, u64 deq_flags)
@@ -58,6 +60,8 @@ void BPF_STRUCT_OPS(maximal_dispatch, s32 cpu, struct task_struct *prev)
 {
     if (!dispatch_mute)
 		bpf_printk("dispatch: cpu=%d, prev=%p\n", cpu, prev);
+	if (scx_bpf_consume(MY_DSQ) && !successful_dispatch_mute)
+		bpf_printk("consumed successfully: cpu=%d, prev=%p\n", cpu, prev);
 }
 
 void BPF_STRUCT_OPS(maximal_runnable, struct task_struct *p, u64 enq_flags)
@@ -86,8 +90,8 @@ void BPF_STRUCT_OPS(maximal_quiescent, struct task_struct *p, u64 deq_flags)
 
 bool BPF_STRUCT_OPS(maximal_yield, struct task_struct *from, struct task_struct *to)
 {
-	// if (!yield_mute)
-    // bpf_printk("yield: from_pid=%d, to_pid=%d\n", from->pid, to->pid);
+	if (!yield_mute)
+		bpf_printk("yield: from_pid=%d, to_pid=%d\n", from->pid, to ? to->pid : -1);
 	return false;
 }
 
@@ -168,6 +172,7 @@ void BPF_STRUCT_OPS(maximal_disable, struct task_struct *p)
 s32 BPF_STRUCT_OPS_SLEEPABLE(maximal_init)
 {
 	bpf_printk("init called\n");
+	scx_bpf_create_dsq(MY_DSQ, -1);
 	return 0;
 }
 
