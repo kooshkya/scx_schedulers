@@ -45,46 +45,31 @@ s32 BPF_STRUCT_OPS(split_select_cpu, struct task_struct *p, s32 prev_cpu, u64 wa
 {
 	bpf_printk("split_select_cpu: pid=%d, prev_cpu=%d, wake_flags=%llu\n", p->pid, prev_cpu, wake_flags);
 	if (pid_exists(p->pid)) {
-		bpf_printk("existed in pid list");
-		struct bpf_cpumask * mask = bpf_cpumask_create();
-		if (!mask) {
-			bpf_printk("ERROR: couldn't create cpumask");
-			return 0;
-		}
-		// TODO: make this use the cpu map
-		bpf_cpumask_set_cpu(0, mask);
-		bpf_cpumask_set_cpu(1, mask);
-		bpf_cpumask_set_cpu(2, mask);
-		bpf_cpumask_set_cpu(3, mask);
-		s32 idle = scx_bpf_pick_idle_cpu((struct cpumask*)mask, 0);
-		bpf_cpumask_release(mask);
-		if (idle >= 0) {
-			bpf_printk("dispatched to cpu %d\n", idle);
-			scx_bpf_dispatch(p, SCX_DSQ_LOCAL, SCX_SLICE_DFL, 0);
-			return idle;
-		}
+		bpf_printk("existed in pid list (select_cpu func)");
+		// TODO: make this use the cpu maps
+		scx_bpf_dispatch(p, SCX_DSQ_LOCAL, SCX_SLICE_DFL, 0);
+		return 0;
 	} else {
-		bpf_printk("didn't exist in pid list");
-		struct bpf_cpumask * mask = bpf_cpumask_create();
-		if (!mask) {
-			bpf_printk("ERROR: couldn't create cpumask");
-			return 0;
-		}
-		// TODO: make this use the cpu map
-		bpf_cpumask_set_cpu(4, mask);
-		bpf_cpumask_set_cpu(5, mask);
-		bpf_cpumask_set_cpu(6, mask);
-		bpf_cpumask_set_cpu(7, mask);
-		s32 idle = scx_bpf_pick_idle_cpu((struct cpumask*)mask, 0);
-		bpf_cpumask_release(mask);
-		if (idle >= 0) {
-			bpf_printk("dispatched to cpu %d\n", idle);
-			scx_bpf_dispatch(p, SCX_DSQ_LOCAL, SCX_SLICE_DFL, 0);
-			return idle;
-		}
+		bpf_printk("didn't exist in pid list (select_cpu func)");
+		// TODO: make this use the cpu maps
+		scx_bpf_dispatch(p, SCX_DSQ_LOCAL, SCX_SLICE_DFL, 0);
+		return 1;
 	}
 	bpf_printk("resort to 0");
 	return 0;
+}
+
+void BPF_STRUCT_OPS(split_enqueue, struct task_struct *p, u64 enq_flags)
+{
+	if (pid_exists(p->pid)) {
+		bpf_printk("existed in pid list (enqueue func)");
+		// TODO: make this use the cpu maps
+		scx_bpf_dispatch(p, SCX_DSQ_LOCAL_ON | 0, SCX_SLICE_DFL, 0);
+	} else {
+		bpf_printk("didn't exist in pid list (enqueue func)");
+		// TODO: make this use the cpu maps
+		scx_bpf_dispatch(p, SCX_DSQ_LOCAL_ON | 1, SCX_SLICE_DFL, 0);
+	}
 }
 
 int setup_cpu_groups(void) {
@@ -148,11 +133,11 @@ s32 BPF_STRUCT_OPS(split_exit)
 	return 0;
 }
 
-void BPF_STRUCT_OPS(split_quiescent, struct task_struct *p, u64 deq_flags) {
-	if (!pid_exists(p->pid)) {
-		__sync_fetch_and_add(&nr_finished_fast, 1);
-	}
-}
+// void BPF_STRUCT_OPS(split_quiescent, struct task_struct *p, u64 deq_flags) {
+// 	if (!pid_exists(p->pid)) {
+// 		__sync_fetch_and_add(&nr_finished_fast, 1);
+// 	}
+// }
 
 void BPF_STRUCT_OPS(split_tick, struct task_struct *p)
 {
@@ -167,9 +152,10 @@ void BPF_STRUCT_OPS(split_tick, struct task_struct *p)
 
 SCX_OPS_DEFINE(split_ops,
 	       .select_cpu		= (void *)split_select_cpu,
+	       .enqueue			= (void *)split_enqueue,
 		   .tick			= (void *)split_tick,
 		   .init			= (void *)split_init,
 		   .exit			= (void *)split_exit,
 	       .name			= "split",
-		   .flags			= SCX_OPS_SWITCH_PARTIAL
+		   .flags			= SCX_OPS_SWITCH_PARTIAL | SCX_OPS_ENQ_LAST
            );
