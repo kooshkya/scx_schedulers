@@ -52,7 +52,7 @@ void BPF_STRUCT_OPS(maximal_enqueue, struct task_struct *p, u64 enq_flags)
 
 void BPF_STRUCT_OPS(maximal_dequeue, struct task_struct *p, u64 deq_flags)
 {
-	if (!dequeue_mute)
+	// if (!dequeue_mute)
 		bpf_printk("dequeue: pid=%d, deq_flags=%llu\n", p->pid, deq_flags);
 }
 
@@ -207,4 +207,4 @@ SCX_OPS_DEFINE(maximal_ops,
 	.init			= (void*)maximal_init,
 	.exit			= (void*)maximal_exit,
 	.name			= "maximal",
-    .flags          = SCX_OPS_SWITCH_PARTIAL);
+    .flags          = SCX_OPS_SWITCH_PARTIAL | SCX_OPS_ENQ_LAST);
