@@ -8,6 +8,7 @@ const volatile u32 cpu_count;
 
 #define MAX_CPUS 20		// TODO: make this dynamically change to machine's CPU count
 #define MAX_PROCESSES 1024	// TODO: put a more realistic upper bound on process count
+#define FAST_SLICE 50000000ULL
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
@@ -43,32 +44,29 @@ bool pid_exists(pid_t pid_to_check) {
 
 s32 BPF_STRUCT_OPS(split_select_cpu, struct task_struct *p, s32 prev_cpu, u64 wake_flags)
 {
-	bpf_printk("split_select_cpu: pid=%d, prev_cpu=%d, wake_flags=%llu\n", p->pid, prev_cpu, wake_flags);
+	// bpf_printk("split_select_cpu: pid=%d, prev_cpu=%d, wake_flags=%llu\n", p->pid, prev_cpu, wake_flags);
 	if (pid_exists(p->pid)) {
 		bpf_printk("existed in pid list (select_cpu func)");
 		// TODO: make this use the cpu maps
-		scx_bpf_dispatch(p, SCX_DSQ_LOCAL, SCX_SLICE_DFL, 0);
+		scx_bpf_dispatch(p, SCX_DSQ_LOCAL, SCX_SLICE_INF, 0);
 		return 0;
-	} else {
-		bpf_printk("didn't exist in pid list (select_cpu func)");
-		// TODO: make this use the cpu maps
-		scx_bpf_dispatch(p, SCX_DSQ_LOCAL, SCX_SLICE_DFL, 0);
-		return 1;
 	}
-	bpf_printk("resort to 0");
-	return 0;
+	bpf_printk("didn't exist in pid list (select_cpu func)");
+	// TODO: make this use the cpu maps
+	scx_bpf_dispatch(p, SCX_DSQ_LOCAL, FAST_SLICE, 0);
+	return 1;
 }
 
 void BPF_STRUCT_OPS(split_enqueue, struct task_struct *p, u64 enq_flags)
 {
-	if (pid_exists(p->pid)) {
-		bpf_printk("existed in pid list (enqueue func)");
+	if (enq_flags & SCX_ENQ_LAST || pid_exists(p->pid)) {
+		// bpf_printk("%d existed in pid list (enqueue func)", p->pid);
 		// TODO: make this use the cpu maps
-		scx_bpf_dispatch(p, SCX_DSQ_LOCAL_ON | 0, SCX_SLICE_DFL, 0);
+		scx_bpf_dispatch(p, SCX_DSQ_LOCAL_ON | 0, SCX_SLICE_INF, 0);
 	} else {
-		bpf_printk("didn't exist in pid list (enqueue func)");
+		// bpf_printk("%d didn't exist in pid list (enqueue func)", p->pid);
 		// TODO: make this use the cpu maps
-		scx_bpf_dispatch(p, SCX_DSQ_LOCAL_ON | 1, SCX_SLICE_DFL, 0);
+		scx_bpf_dispatch(p, SCX_DSQ_LOCAL_ON | 1, FAST_SLICE, 0);
 	}
 }
 
@@ -132,12 +130,6 @@ s32 BPF_STRUCT_OPS(split_exit)
 {
 	return 0;
 }
-
-// void BPF_STRUCT_OPS(split_quiescent, struct task_struct *p, u64 deq_flags) {
-// 	if (!pid_exists(p->pid)) {
-// 		__sync_fetch_and_add(&nr_finished_fast, 1);
-// 	}
-// }
 
 void BPF_STRUCT_OPS(split_tick, struct task_struct *p)
 {
