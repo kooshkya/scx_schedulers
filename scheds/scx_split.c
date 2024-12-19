@@ -52,7 +52,14 @@ int main(int argc, char **argv) {
     fflush(stdout);
 
     while (!exit_req && !UEI_EXITED(skel, uei)) {
-        sleep(1);
+        printf("total selected: %lu\n", skel->bss->nr_total_selected);
+        printf("total enqueued: %lu\n", skel->bss->nr_total_enqueued);
+        printf("sent to slow: %lu\n", skel->bss->nr_sent_to_slow);
+        printf("selected_for_fast: %lu\n", skel->bss->nr_selected_for_fast);
+        printf("enqueued_for_fast: %lu\n", skel->bss->nr_enqueued_for_fast);
+        printf("####################\n\n");
+
+        sleep(3);
     }
 
     bpf_link__destroy(link);

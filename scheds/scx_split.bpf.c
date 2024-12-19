@@ -35,7 +35,7 @@ int fast_group_size;
 int slow_group_size;
 int pid_array_size;
 
-u64 nr_finished_fast, nr_sent_to_slow;
+volatile u64 nr_finished_fast, nr_sent_to_slow, nr_selected_for_fast, nr_enqueued_for_fast, nr_total_enqueued, nr_total_selected;
 
 bool pid_exists(pid_t pid_to_check) {
 	u8 *value = bpf_map_lookup_elem(&slow_pids, &pid_to_check);
@@ -52,32 +52,36 @@ s32 __always_inline get_fast_cpu() {
 
 s32 BPF_STRUCT_OPS(split_select_cpu, struct task_struct *p, s32 prev_cpu, u64 wake_flags)
 {
-	bpf_printk("split_select_cpu: pid=%d, prev_cpu=%d, wake_flags=%llu\n", p->pid, prev_cpu, wake_flags);
+	// bpf_printk("split_select_cpu: pid=%d, prev_cpu=%d, wake_flags=%llu\n", p->pid, prev_cpu, wake_flags);
+	__sync_fetch_and_add(&nr_total_selected, 1);
 	if (pid_exists(p->pid)) {
 		// TODO: make this use the cpu maps and select more smartly
 		scx_bpf_dispatch(p, SCX_DSQ_LOCAL, SCX_SLICE_INF, 0);
 		s32 slow_cpu = get_slow_cpu();
-		bpf_printk("selecting slow %d for %d\n", slow_cpu, p->pid);
+		// bpf_printk("selecting slow %d for %d\n", slow_cpu, p->pid);
 		return slow_cpu;
 	}
 	// TODO: make this use the cpu maps and select more smartly
+	__sync_fetch_and_add(&nr_selected_for_fast, 1);
 	scx_bpf_dispatch(p, SCX_DSQ_LOCAL, FAST_SLICE, 0);
 	s32 fast_cpu = get_fast_cpu();
-	bpf_printk("selecting fast %d for %d\n", fast_cpu, p->pid);
+	// bpf_printk("selecting fast %d for %d\n", fast_cpu, p->pid);
 	return fast_cpu;
 }
 
 void BPF_STRUCT_OPS(split_enqueue, struct task_struct *p, u64 enq_flags)
 {
-	if (enq_flags & SCX_ENQ_LAST || pid_exists(p->pid)) {
+	__sync_fetch_and_add(&nr_total_enqueued, 1);
+	if (pid_exists(p->pid)) {
 		// TODO: make this use the cpu maps
 		s32 slow_cpu = get_slow_cpu();
-		bpf_printk("enqueueing slow %d for %d\n", slow_cpu, p->pid);
+		// bpf_printk("enqueueing slow %d for %d\n", slow_cpu, p->pid);
 		scx_bpf_dispatch(p, SCX_DSQ_LOCAL_ON | slow_cpu, SCX_SLICE_INF, 0);
 	} else {
 		// TODO: make this use the cpu maps
 		s32 fast_cpu = get_fast_cpu();
-		bpf_printk("enqueuing fast %d for %d\n", fast_cpu, p->pid);
+		// bpf_printk("enqueuing fast %d for %d\n", fast_cpu, p->pid);
+		__sync_fetch_and_add(&nr_enqueued_for_fast, 1);
 		scx_bpf_dispatch(p, SCX_DSQ_LOCAL_ON | fast_cpu, FAST_SLICE, 0);
 	}
 }
