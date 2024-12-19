@@ -42,31 +42,43 @@ bool pid_exists(pid_t pid_to_check) {
     return value != NULL;
 }
 
+s32 __always_inline get_slow_cpu() {
+	return (s32)(bpf_get_prandom_u32() % 2);
+}
+
+s32 __always_inline get_fast_cpu() {
+	return (s32)(2 + bpf_get_prandom_u32() % 2);
+}
+
 s32 BPF_STRUCT_OPS(split_select_cpu, struct task_struct *p, s32 prev_cpu, u64 wake_flags)
 {
-	// bpf_printk("split_select_cpu: pid=%d, prev_cpu=%d, wake_flags=%llu\n", p->pid, prev_cpu, wake_flags);
+	bpf_printk("split_select_cpu: pid=%d, prev_cpu=%d, wake_flags=%llu\n", p->pid, prev_cpu, wake_flags);
 	if (pid_exists(p->pid)) {
-		bpf_printk("existed in pid list (select_cpu func)");
-		// TODO: make this use the cpu maps
+		// TODO: make this use the cpu maps and select more smartly
 		scx_bpf_dispatch(p, SCX_DSQ_LOCAL, SCX_SLICE_INF, 0);
-		return 0;
+		s32 slow_cpu = get_slow_cpu();
+		bpf_printk("selecting slow %d for %d\n", slow_cpu, p->pid);
+		return slow_cpu;
 	}
-	bpf_printk("didn't exist in pid list (select_cpu func)");
-	// TODO: make this use the cpu maps
+	// TODO: make this use the cpu maps and select more smartly
 	scx_bpf_dispatch(p, SCX_DSQ_LOCAL, FAST_SLICE, 0);
-	return 1;
+	s32 fast_cpu = get_fast_cpu();
+	bpf_printk("selecting fast %d for %d\n", fast_cpu, p->pid);
+	return fast_cpu;
 }
 
 void BPF_STRUCT_OPS(split_enqueue, struct task_struct *p, u64 enq_flags)
 {
 	if (enq_flags & SCX_ENQ_LAST || pid_exists(p->pid)) {
-		// bpf_printk("%d existed in pid list (enqueue func)", p->pid);
 		// TODO: make this use the cpu maps
-		scx_bpf_dispatch(p, SCX_DSQ_LOCAL_ON | 0, SCX_SLICE_INF, 0);
+		s32 slow_cpu = get_slow_cpu();
+		bpf_printk("enqueueing slow %d for %d\n", slow_cpu, p->pid);
+		scx_bpf_dispatch(p, SCX_DSQ_LOCAL_ON | slow_cpu, SCX_SLICE_INF, 0);
 	} else {
-		// bpf_printk("%d didn't exist in pid list (enqueue func)", p->pid);
 		// TODO: make this use the cpu maps
-		scx_bpf_dispatch(p, SCX_DSQ_LOCAL_ON | 1, FAST_SLICE, 0);
+		s32 fast_cpu = get_fast_cpu();
+		bpf_printk("enqueuing fast %d for %d\n", fast_cpu, p->pid);
+		scx_bpf_dispatch(p, SCX_DSQ_LOCAL_ON | fast_cpu, FAST_SLICE, 0);
 	}
 }
 
